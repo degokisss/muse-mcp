@@ -69,7 +69,7 @@ Muse wrote for that turn.
 `muse_read_last` returns text only.
 
 ## Env
-MUSE_PROFILE_DIR, MUSE_CDP (attach to Chrome at e.g. http://127.0.0.1:9222), MUSE_HEADLESS=1,
+MUSE_PROFILE_DIR (default ~/.muse-mcp/profile), MUSE_CDP (attach to Chrome at e.g. http://127.0.0.1:9222), MUSE_HEADLESS=1,
 MUSE_QUIET_MS (default 1200), MUSE_CHAT_TIMEOUT_MS (default 240000), MUSE_CHANNEL (chrome|msedge),
 MUSE_OUTPUT_DIR (where generated videos are saved)
 
