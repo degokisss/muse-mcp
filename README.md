@@ -54,6 +54,9 @@ Then call `muse_chat` with a short prompt such as "Reply with exactly: pong".
 ## Tools
 muse_status, muse_login, muse_chat, muse_read_last, muse_new_chat, muse_close
 
+Muse is a single persistent thread: `muse_new_chat` and `new_thread` only reload the home page and do
+not clear history.
+
 ### Images and video
 Ask `muse_chat` for media (e.g. "Generate an image of ...", "Generate a 5 second video of ...") with
 `text_only: false`; the default `text_only: true` tells Muse not to use tools. `reply` holds all text

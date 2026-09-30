@@ -62,6 +62,7 @@ export class MuseDriver {
     if (config.cdpUrl) {
       this.browser = await chromium.connectOverCDP(config.cdpUrl);
       this.context = this.browser.contexts()[0] ?? (await this.browser.newContext());
+      this.browser.once("disconnected", () => this.reset());
       return;
     }
     try {
@@ -84,6 +85,8 @@ export class MuseDriver {
         );
       }
     }
+    this.context?.once("close", () => this.reset()); // Chrome crashed or the window was closed: relaunch on next call
+    this.browser?.once("disconnected", () => this.reset());
   }
 
   private async getPage(): Promise<Page> {
@@ -238,7 +241,8 @@ export class MuseDriver {
       this.loggedInAt = Date.now();
     }
 
-    const beforeCount = (await this.readMessages(page)).filter((m) => m.role === "assistant").length;
+    // Count only; pollState slices past the end so no message text is read.
+    const beforeCount = (await this.pollState(page, Number.MAX_SAFE_INTEGER)).count;
 
     await this.type(page, prompt);
 
@@ -271,26 +275,36 @@ export class MuseDriver {
 
       const quiet = Date.now() - lastChangeAt >= config.quietMs;
       if (sawActivity && !s.streaming && quiet && (reply.length > 0 || mediaCount > 0)) {
-        const out = mediaCount > 0 ? await this.collectMedia(page, beforeCount) : { media: [], warnings: [] };
-        const images: ChatImage[] = [];
-        const videos: ChatVideo[] = [];
-        for (const m of out.media) {
-          if (m.kind === "image") images.push({ mimeType: m.mimeType, data: m.data });
-          else videos.push(await saveVideo(m, videos.length));
-        }
-        return { reply, images, videos, ...(out.warnings.length ? { warnings: out.warnings } : {}), timedOut: false, elapsedMs: Date.now() - t0 };
+        return this.result(page, beforeCount, reply, mediaCount, false, t0);
       }
     }
-    return { reply, images: [], videos: [], timedOut: true, elapsedMs: Date.now() - t0 };
+    return this.result(page, beforeCount, reply, mediaCount, true, t0);
   }
 
-  async close(): Promise<void> {
-    // CDP-attached: only disconnect. Own browser: close it.
-    if (this.browser) await this.browser.close().catch(() => undefined);
-    else if (this.context) await this.context.close().catch(() => undefined);
+  private reset(): void {
     this.browser = undefined;
     this.context = undefined;
     this.page = undefined;
     this.loggedInAt = 0;
+  }
+
+  /** Collect what Muse rendered since `from`; images go inline, videos to disk. */
+  private async result(page: Page, from: number, reply: string, mediaCount: number, timedOut: boolean, t0: number): Promise<ChatResult> {
+    const out = mediaCount > 0 ? await this.collectMedia(page, from) : { media: [], warnings: [] };
+    const images: ChatImage[] = [];
+    const videos: ChatVideo[] = [];
+    for (const m of out.media) {
+      if (m.kind === "image") images.push({ mimeType: m.mimeType, data: m.data });
+      else videos.push(await saveVideo(m, videos.length));
+    }
+    return { reply, images, videos, ...(out.warnings.length ? { warnings: out.warnings } : {}), timedOut, elapsedMs: Date.now() - t0 };
+  }
+
+  async close(): Promise<void> {
+    // CDP-attached: only disconnect. Own browser: close it.
+    const { browser, context } = this;
+    this.reset();
+    if (browser) await browser.close().catch(() => undefined);
+    else if (context) await context.close().catch(() => undefined);
   }
 }

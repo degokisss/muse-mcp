@@ -1,6 +1,6 @@
 {
   "name": "@santaclone/muse-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server (stdio) that drives your logged-in Chrome to chat with Muse (muse.ai), including image and video generation.",
   "type": "module",
   "bin": { "muse-mcp": "dist/server.js" },

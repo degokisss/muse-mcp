@@ -79,7 +79,7 @@ async function main() {
         prompt: z.string().min(1),
         instructions: z.string().optional().describe("Optional standing instructions placed before the prompt."),
         text_only: z.boolean().optional().describe("Default true: tell Muse not to run tools or browse."),
-        new_thread: z.boolean().optional().describe("Navigate to the home composer first (best-effort fresh context)."),
+        new_thread: z.boolean().optional().describe("Reload the Muse home page first. Does not clear history (Muse is one persistent thread)."),
         timeout_sec: z.number().int().min(10).max(1800).optional(),
       },
     },
@@ -111,7 +111,7 @@ async function main() {
 
   server.registerTool(
     "muse_new_chat",
-    { description: "Navigate to the Muse home composer." },
+    { description: "Reload the Muse home page. Muse is a single persistent thread, so this does NOT clear history; use it to recover a stuck page." },
     async () => {
       return run(() => driver.newChat(), () => text("ok"));
     },
