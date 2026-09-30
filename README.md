@@ -8,34 +8,28 @@ MCP server (stdio) that drives your logged-in Chrome to talk to Muse (muse.ai). 
 - A Meta account that can use Muse
 
 ## Install
-    git clone https://github.com/degokisss/muse-mcp.git && cd muse-mcp
-    npm install && npm run build
-    npm run login        # opens Chrome, sign in to Meta once, window closes when done
+No clone needed. Sign in once (opens Chrome, close it or wait for it to close by itself):
 
-The session is saved in `.muse-profile` (relative to the directory the server is started from).
-Clients may start the server from another directory, which would use an empty profile and report
-`loggedIn: false`. Set an absolute `MUSE_PROFILE_DIR` in the client config, and use the same value
-when running `npm run login`:
+    npx -y @degokisss/muse-mcp --login
 
-    MUSE_PROFILE_DIR=/abs/path/muse-mcp/.muse-profile npm run login
+The Meta session is saved in `~/.muse-mcp/profile` (override with `MUSE_PROFILE_DIR`). Use the same
+`MUSE_PROFILE_DIR` for login and for the client. Close the login Chrome before starting a client;
+see the one-instance limit under Status.
 
-Close the login window's Chrome before starting any client; see the one-instance limit under Status.
+From source instead: `git clone https://github.com/degokisss/muse-mcp.git && cd muse-mcp &&
+npm install && npm run build && npm run login`, and use `node /abs/path/muse-mcp/dist/server.js`
+in place of `npx -y @degokisss/muse-mcp` below.
 
 ## Connect a client
-Replace `/abs/path/muse-mcp` with the real path in each snippet.
-
 ### omp
 Project: `.omp/mcp.json`. All projects: `~/.omp/agent/mcp.json`. Then run `/mcp reload` or restart omp.
 
     {
       "mcpServers": {
         "muse": {
-          "command": "node",
-          "args": ["/abs/path/muse-mcp/dist/server.js"],
-          "env": {
-            "MUSE_HEADLESS": "1",
-            "MUSE_PROFILE_DIR": "/abs/path/muse-mcp/.muse-profile"
-          }
+          "command": "npx",
+          "args": ["-y", "@degokisss/muse-mcp"],
+          "env": { "MUSE_HEADLESS": "1" }
         }
       }
     }
@@ -44,17 +38,17 @@ Tools appear as `mcp__muse_chat`, `mcp__muse_status`, `mcp__muse_read_last`, `mc
 `mcp__muse_login`, `mcp__muse_close`.
 
 ### Claude Code
-    claude mcp add muse -e MUSE_HEADLESS=1 -e MUSE_PROFILE_DIR=/abs/path/muse-mcp/.muse-profile -- node /abs/path/muse-mcp/dist/server.js
+    claude mcp add muse -e MUSE_HEADLESS=1 -- npx -y @degokisss/muse-mcp
 
 ### Codex (~/.codex/config.toml)
     [mcp_servers.muse]
-    command = "node"
-    args = ["/abs/path/muse-mcp/dist/server.js"]
-    env = { MUSE_HEADLESS = "1", MUSE_PROFILE_DIR = "/abs/path/muse-mcp/.muse-profile" }
+    command = "npx"
+    args = ["-y", "@degokisss/muse-mcp"]
+    env = { MUSE_HEADLESS = "1" }
 
 ## Verify
 Ask the client to call `muse_status`. Expected: `loggedIn: true` and `composerReady: true`.
-If `loggedIn` is false, re-run `npm run login` with the same `MUSE_PROFILE_DIR`.
+If `loggedIn` is false, re-run the login command with the same `MUSE_PROFILE_DIR`.
 Then call `muse_chat` with a short prompt such as "Reply with exactly: pong".
 
 ## Tools

@@ -1,10 +1,17 @@
 {
-  "name": "muse-mcp",
+  "name": "@degokisss/muse-mcp",
   "version": "0.1.0",
+  "description": "MCP server (stdio) that drives your logged-in Chrome to chat with Muse (muse.ai), including image and video generation.",
   "type": "module",
   "bin": { "muse-mcp": "dist/server.js" },
+  "files": ["dist"],
+  "engines": { "node": ">=18" },
+  "repository": { "type": "git", "url": "git+https://github.com/degokisss/muse-mcp.git" },
+  "keywords": ["mcp", "muse", "playwright"],
+  "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/server.js",
     "login": "node dist/server.js --login"
   },

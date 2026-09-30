@@ -6,7 +6,7 @@ const num = (v: string | undefined, d: number) => (v && !Number.isNaN(Number(v))
 
 export const config = {
   url: env.MUSE_URL ?? "https://muse.ai/",
-  profileDir: path.resolve(env.MUSE_PROFILE_DIR ?? "./.muse-profile"),
+  profileDir: path.resolve(env.MUSE_PROFILE_DIR ?? path.join(os.homedir(), ".muse-mcp", "profile")),
   outputDir: path.resolve(env.MUSE_OUTPUT_DIR ?? path.join(os.tmpdir(), "muse-mcp")),
   channel: (env.MUSE_CHANNEL ?? "chrome") as "chrome" | "msedge",
   headless: env.MUSE_HEADLESS === "1",
