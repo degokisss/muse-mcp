@@ -10,7 +10,7 @@ const queue = new Queue();
 
 interface ToolResult {
   [key: string]: unknown; // required by the MCP SDK handler result type
-  content: { type: "text"; text: string }[];
+  content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[];
   isError?: true;
 }
 
@@ -91,7 +91,12 @@ async function main() {
       ];
       return run(
         () => driver.chat(parts.join(""), { timeoutMs: timeout_sec ? timeout_sec * 1000 : undefined, newThread: new_thread }),
-        (r) => json(r, Boolean(r.error) || (r.timedOut && !r.reply)),
+        ({ images, ...meta }) => {
+          const failed = Boolean(meta.error) || (meta.timedOut && !meta.reply && images.length === 0);
+          const res = json({ ...meta, imageCount: images.length }, failed);
+          res.content.push(...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType })));
+          return res;
+        },
       );
     },
   );

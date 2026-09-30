@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { config } from "./config.js";
 import { SELECTORS, resolve } from "./selectors.js";
@@ -7,8 +9,40 @@ export interface Msg {
   text: string;
 }
 
+export interface ChatImage {
+  mimeType: string;
+  /** Base64, no data: prefix. */
+  data: string;
+}
+
+/** Videos are large, so they are written to disk and returned by path rather than inline. */
+export interface ChatVideo {
+  path: string;
+  mimeType: string;
+  bytes: number;
+}
+
+interface RawMedia {
+  kind: "image" | "video";
+  mimeType: string;
+  data: string;
+}
+
+const VIDEO_EXT: Record<string, string> = { "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov" };
+
+async function saveVideo(m: RawMedia, index: number): Promise<ChatVideo> {
+  await mkdir(config.outputDir, { recursive: true });
+  const file = path.join(config.outputDir, `muse-${Date.now()}-${index}.${VIDEO_EXT[m.mimeType] ?? "mp4"}`);
+  const bytes = Buffer.from(m.data, "base64");
+  await writeFile(file, bytes);
+  return { path: file, mimeType: m.mimeType, bytes: bytes.length };
+}
+
 export interface ChatResult {
   reply: string;
+  images: ChatImage[];
+  videos: ChatVideo[];
+  warnings?: string[];
   timedOut: boolean;
   error?: string;
   elapsedMs: number;
@@ -106,10 +140,10 @@ export class MuseDriver {
     }, sel);
   }
 
-  /** One round-trip per poll: error notice, streaming flag, assistant count and last assistant text. */
-  private async pollState(page: Page) {
+  /** One round-trip per poll: error notice, streaming flag, assistant count and the assistant items after `from`. */
+  private async pollState(page: Page, from: number) {
     return page.evaluate(
-      ({ msg, err, stop }) => {
+      ({ msg, err, stop, from }) => {
         const visible = (sel: string[]): HTMLElement | null => {
           for (const s of sel) {
             const el = document.querySelector(s) as HTMLElement | null;
@@ -124,10 +158,42 @@ export class MuseDriver {
           error: errEl ? errEl.innerText : (null as string | null),
           streaming: visible(stop) !== null,
           count: a.length,
-          lastText: a.length ? (a[a.length - 1] as HTMLElement).innerText : "",
+          items: a.slice(from).map((el) => ({ text: (el as HTMLElement).innerText, media: el.querySelectorAll("img, video").length })),
         };
       },
-      { msg: [...SELECTORS.message], err: [...SELECTORS.errorNotice], stop: [...SELECTORS.stopButton] },
+      { msg: [...SELECTORS.message], err: [...SELECTORS.errorNotice], stop: [...SELECTORS.stopButton], from },
+    );
+  }
+
+  /** Read the images/videos Muse rendered after `from` out of the page (they are blob: URLs, unusable outside it). */
+  private async collectMedia(page: Page, from: number): Promise<{ media: RawMedia[]; warnings: string[] }> {
+    const sel = (await resolve(page, "message")) ?? SELECTORS.message[0];
+    return page.evaluate(
+      async ({ sel, from }) => {
+        const assistants = Array.from(document.querySelectorAll(sel)).filter((el) => el.getAttribute("data-message-role") === "assistant");
+        const els = assistants.slice(from).flatMap((el) => Array.from(el.querySelectorAll<HTMLImageElement | HTMLVideoElement>("img, video")));
+        const media: { kind: "image" | "video"; mimeType: string; data: string }[] = [];
+        const warnings: string[] = [];
+        for (const el of els) {
+          const kind = el instanceof HTMLVideoElement ? "video" : "image";
+          const src = el.currentSrc || el.src;
+          try {
+            if (el instanceof HTMLImageElement) await el.decode();
+            const blob = await (await fetch(src)).blob();
+            const url = await new Promise<string>((ok, fail) => {
+              const fr = new FileReader();
+              fr.onload = () => ok(String(fr.result));
+              fr.onerror = () => fail(fr.error);
+              fr.readAsDataURL(blob);
+            });
+            media.push({ kind, mimeType: blob.type || (kind === "video" ? "video/mp4" : "image/png"), data: url.slice(url.indexOf(",") + 1) });
+          } catch (e) {
+            warnings.push(`${kind} not readable (${src.slice(0, 80)}): ${(e as Error).message}`);
+          }
+        }
+        return { media, warnings };
+      },
+      { sel, from },
     );
   }
 
@@ -167,48 +233,55 @@ export class MuseDriver {
     if (opts.newThread) await this.newChat();
     if (Date.now() - this.loggedInAt > LOGIN_TTL_MS) {
       if (!(await this.isLoggedIn(page))) {
-        return { reply: "", timedOut: false, error: "Not logged in. Run muse_login first.", elapsedMs: 0 };
+        return { reply: "", images: [], videos: [], timedOut: false, error: "Not logged in. Run muse_login first.", elapsedMs: 0 };
       }
       this.loggedInAt = Date.now();
     }
 
-    const before = await this.readMessages(page);
-    const beforeAssistant = before.filter((m) => m.role === "assistant");
-    const beforeCount = beforeAssistant.length;
-    const beforeLastText = beforeAssistant.at(-1)?.text ?? "";
+    const beforeCount = (await this.readMessages(page)).filter((m) => m.role === "assistant").length;
 
     await this.type(page, prompt);
 
-    let lastText = "";
+    let lastSig = "";
     let lastChangeAt = Date.now();
     let sawActivity = false;
+    let reply = "";
+    let mediaCount = 0;
 
     while (Date.now() - t0 < timeoutMs) {
       await sleep(config.pollMs);
 
-      const s = await this.pollState(page);
+      const s = await this.pollState(page, beforeCount);
       if (s.error !== null) {
-        return { reply: lastText, timedOut: false, error: s.error || "Muse reported an error", elapsedMs: Date.now() - t0 };
+        return { reply, images: [], videos: [], timedOut: false, error: s.error || "Muse reported an error", elapsedMs: Date.now() - t0 };
       }
 
-      const current = s.lastText;
-      const isNew = s.count > beforeCount || (current !== beforeLastText && current.length > 0);
-      const streaming = s.streaming;
-
-      if (streaming || isNew) sawActivity = true;
+      const isNew = s.count > beforeCount;
+      if (s.streaming || isNew) sawActivity = true;
       if (!isNew) continue;
 
-      if (current !== lastText) {
-        lastText = current;
+      // Everything Muse appended since the prompt: text bubbles and image/video bubbles, in order.
+      const sig = s.items.map((i) => `${i.text}\u0000${i.media}`).join("\u0001");
+      if (sig !== lastSig) {
+        lastSig = sig;
         lastChangeAt = Date.now();
+        reply = s.items.map((i) => i.text).filter(Boolean).join("\n\n");
+        mediaCount = s.items.reduce((n, i) => n + i.media, 0);
       }
 
       const quiet = Date.now() - lastChangeAt >= config.quietMs;
-      if (sawActivity && !streaming && quiet && lastText.length > 0) {
-        return { reply: lastText, timedOut: false, elapsedMs: Date.now() - t0 };
+      if (sawActivity && !s.streaming && quiet && (reply.length > 0 || mediaCount > 0)) {
+        const out = mediaCount > 0 ? await this.collectMedia(page, beforeCount) : { media: [], warnings: [] };
+        const images: ChatImage[] = [];
+        const videos: ChatVideo[] = [];
+        for (const m of out.media) {
+          if (m.kind === "image") images.push({ mimeType: m.mimeType, data: m.data });
+          else videos.push(await saveVideo(m, videos.length));
+        }
+        return { reply, images, videos, ...(out.warnings.length ? { warnings: out.warnings } : {}), timedOut: false, elapsedMs: Date.now() - t0 };
       }
     }
-    return { reply: lastText, timedOut: true, elapsedMs: Date.now() - t0 };
+    return { reply, images: [], videos: [], timedOut: true, elapsedMs: Date.now() - t0 };
   }
 
   async close(): Promise<void> {

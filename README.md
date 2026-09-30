@@ -60,9 +60,24 @@ Then call `muse_chat` with a short prompt such as "Reply with exactly: pong".
 ## Tools
 muse_status, muse_login, muse_chat, muse_read_last, muse_new_chat, muse_close
 
+### Images and video
+Ask `muse_chat` for media (e.g. "Generate an image of ...", "Generate a 5 second video of ...") with
+`text_only: false`; the default `text_only: true` tells Muse not to use tools. `reply` holds all text
+Muse wrote for that turn.
+
+- Images come back as MCP `image` content (base64, usually `image/webp`) after the JSON text result,
+  which reports `imageCount`. A video bubble may also yield a poster image.
+- Videos are too large to send inline (about 2 MB for 5 s at 720p). They are written to
+  `MUSE_OUTPUT_DIR` (default: `muse-mcp` under the OS temp dir) and listed in `videos` as
+  `{ path, mimeType, bytes }`. Move or copy files you want to keep; the temp dir is not permanent.
+- Media that cannot be read out of the page is listed in `warnings`.
+
+`muse_read_last` returns text only.
+
 ## Env
 MUSE_PROFILE_DIR, MUSE_CDP (attach to Chrome at e.g. http://127.0.0.1:9222), MUSE_HEADLESS=1,
-MUSE_QUIET_MS (default 1200), MUSE_CHAT_TIMEOUT_MS (default 240000), MUSE_CHANNEL (chrome|msedge)
+MUSE_QUIET_MS (default 1200), MUSE_CHAT_TIMEOUT_MS (default 240000), MUSE_CHANNEL (chrome|msedge),
+MUSE_OUTPUT_DIR (where generated videos are saved)
 
 ## Status
 Tested against a live Muse session (headed and `MUSE_HEADLESS=1`): all tools work
