@@ -10,7 +10,7 @@ MCP server (stdio) that drives your logged-in Chrome to talk to Muse (muse.ai). 
 ## Install
 No clone needed. Sign in once (opens Chrome, close it or wait for it to close by itself):
 
-    npx -y @degokisss/muse-mcp --login
+    npx -y @santaclone/muse-mcp --login
 
 The Meta session is saved in `~/.muse-mcp/profile` (override with `MUSE_PROFILE_DIR`). Use the same
 `MUSE_PROFILE_DIR` for login and for the client. Close the login Chrome before starting a client;
@@ -18,7 +18,7 @@ see the one-instance limit under Status.
 
 From source instead: `git clone https://github.com/degokisss/muse-mcp.git && cd muse-mcp &&
 npm install && npm run build && npm run login`, and use `node /abs/path/muse-mcp/dist/server.js`
-in place of `npx -y @degokisss/muse-mcp` below.
+in place of `npx -y @santaclone/muse-mcp` below.
 
 ## Connect a client
 ### omp
@@ -28,7 +28,7 @@ Project: `.omp/mcp.json`. All projects: `~/.omp/agent/mcp.json`. Then run `/mcp 
       "mcpServers": {
         "muse": {
           "command": "npx",
-          "args": ["-y", "@degokisss/muse-mcp"],
+          "args": ["-y", "@santaclone/muse-mcp"],
           "env": { "MUSE_HEADLESS": "1" }
         }
       }
@@ -38,12 +38,12 @@ Tools appear as `mcp__muse_chat`, `mcp__muse_status`, `mcp__muse_read_last`, `mc
 `mcp__muse_login`, `mcp__muse_close`.
 
 ### Claude Code
-    claude mcp add muse -e MUSE_HEADLESS=1 -- npx -y @degokisss/muse-mcp
+    claude mcp add muse -e MUSE_HEADLESS=1 -- npx -y @santaclone/muse-mcp
 
 ### Codex (~/.codex/config.toml)
     [mcp_servers.muse]
     command = "npx"
-    args = ["-y", "@degokisss/muse-mcp"]
+    args = ["-y", "@santaclone/muse-mcp"]
     env = { MUSE_HEADLESS = "1" }
 
 ## Verify

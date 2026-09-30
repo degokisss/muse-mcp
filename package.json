@@ -1,5 +1,5 @@
 {
-  "name": "@degokisss/muse-mcp",
+  "name": "@santaclone/muse-mcp",
   "version": "0.1.0",
   "description": "MCP server (stdio) that drives your logged-in Chrome to chat with Muse (muse.ai), including image and video generation.",
   "type": "module",
